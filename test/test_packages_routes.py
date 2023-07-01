@@ -1526,6 +1526,7 @@ def test_packages_post_disown_as_maintainer(
     errors = get_errors(resp.text)
     expected = "You did not select any packages to disown."
     assert errors[0].text.strip() == expected
+    db.refresh(package)
     assert package.PackageBase.Maintainer is not None
 
     # Try to disown `package` without giving the confirm argument.
@@ -1550,6 +1551,7 @@ def test_packages_post_disown_as_maintainer(
             data={"action": "disown", "IDs": [package.ID], "confirm": True},
         )
     assert resp.status_code == int(HTTPStatus.BAD_REQUEST)
+    db.refresh(package)
     assert package.PackageBase.Maintainer is not None
     errors = get_errors(resp.text)
     expected = "You are not allowed to disown one of the packages you selected."
@@ -1563,6 +1565,7 @@ def test_packages_post_disown_as_maintainer(
             data={"action": "disown", "IDs": [package.ID], "confirm": True},
         )
 
+    db.get_session().expire_all()
     assert package.PackageBase.Maintainer is None
     successes = get_successes(resp.text)
     expected = "The selected packages have been disowned."
@@ -1647,6 +1650,7 @@ def test_packages_post_delete(
 
     # Whoo. Now, let's finally make a valid request as `tu_user`
     # to delete `package`.
+    pkgname = package.PackageBase.Name
     with client as request:
         request.cookies = tu_cookies
         resp = request.post(
@@ -1659,7 +1663,7 @@ def test_packages_post_delete(
     assert successes[0].text.strip() == expected
 
     # Expect that the package deletion was logged.
-    pkgbases = [package.PackageBase.Name]
+    pkgbases = [pkgname]
     expected = (
         f"Privileged user '{tu_user.Username}' deleted the "
         f"following package bases: {str(pkgbases)}."

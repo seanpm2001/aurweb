@@ -764,6 +764,7 @@ def test_tu_proposal_vote(client, proposal):
     assert response.status_code == int(HTTPStatus.OK)
 
     # Check that the proposal record got updated.
+    db.refresh(voteinfo)
     assert voteinfo.Yes == yes + 1
 
     # Check that the new TUVote exists.

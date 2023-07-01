@@ -686,6 +686,7 @@ def test_pkgbase_comment_pin_as_co(
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
 
     # Assert that PinnedTS got set.
+    db.refresh(comment)
     assert comment.PinnedTS > 0
 
     # Unpin the comment we just pinned.
@@ -696,6 +697,7 @@ def test_pkgbase_comment_pin_as_co(
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
 
     # Let's assert that PinnedTS was unset.
+    db.refresh(comment)
     assert comment.PinnedTS == 0
 
 
@@ -714,6 +716,7 @@ def test_pkgbase_comment_pin(
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
 
     # Assert that PinnedTS got set.
+    db.refresh(comment)
     assert comment.PinnedTS > 0
 
     # Unpin the comment we just pinned.
@@ -724,6 +727,7 @@ def test_pkgbase_comment_pin(
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
 
     # Let's assert that PinnedTS was unset.
+    db.refresh(comment)
     assert comment.PinnedTS == 0
 
 
@@ -1038,6 +1042,7 @@ def test_pkgbase_flag(
         request.cookies = cookies
         resp = request.post(endpoint, data={"comments": "Test"})
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
+    db.refresh(pkgbase)
     assert pkgbase.Flagger == user
     assert pkgbase.FlaggerComment == "Test"
 
@@ -1075,6 +1080,7 @@ def test_pkgbase_flag(
         request.cookies = user2_cookies
         resp = request.post(endpoint)
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
+    db.refresh(pkgbase)
     assert pkgbase.Flagger == user
 
     # Now, test that the 'maintainer' user can.
@@ -1083,6 +1089,7 @@ def test_pkgbase_flag(
         request.cookies = maint_cookies
         resp = request.post(endpoint)
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
+    db.refresh(pkgbase)
     assert pkgbase.Flagger is None
 
     # Flag it again.
@@ -1096,6 +1103,7 @@ def test_pkgbase_flag(
         request.cookies = cookies
         resp = request.post(endpoint)
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
+    db.refresh(pkgbase)
     assert pkgbase.Flagger is None
 
 
@@ -1168,6 +1176,7 @@ def test_pkgbase_vote(client: TestClient, user: User, package: Package):
 
     vote = pkgbase.package_votes.filter(PackageVote.UsersID == user.ID).first()
     assert vote is not None
+    db.refresh(pkgbase)
     assert pkgbase.NumVotes == 1
 
     # Remove vote.
@@ -1179,6 +1188,7 @@ def test_pkgbase_vote(client: TestClient, user: User, package: Package):
 
     vote = pkgbase.package_votes.filter(PackageVote.UsersID == user.ID).first()
     assert vote is None
+    db.refresh(pkgbase)
     assert pkgbase.NumVotes == 0
 
 
@@ -1590,9 +1600,9 @@ def test_pkgbase_merge_post(
     assert resp.status_code == int(HTTPStatus.SEE_OTHER)
 
     # Save these relationships for later comparison.
-    comments = package.PackageBase.comments.all()
-    notifs = package.PackageBase.notifications.all()
-    votes = package.PackageBase.package_votes.all()
+    comments = [row.__dict__ for row in package.PackageBase.comments.all()]
+    notifs = [row.__dict__ for row in package.PackageBase.notifications.all()]
+    votes = [row.__dict__ for row in package.PackageBase.package_votes.all()]
 
     # Merge the package into target.
     endpoint = f"/pkgbase/{package.PackageBase.Name}/merge"
@@ -1610,9 +1620,13 @@ def test_pkgbase_merge_post(
 
     # Assert that the original comments, notifs and votes we setup
     # got migrated to target as intended.
-    assert comments == target.comments.all()
-    assert notifs == target.notifications.all()
-    assert votes == target.package_votes.all()
+    db.get_session().refresh(target)
+    assert len(comments) == target.comments.count()
+    assert comments[0]["PackageBaseID"] != target.ID
+    assert len(notifs) == target.notifications.count()
+    assert notifs[0]["PackageBaseID"] != target.ID
+    assert len(votes) == target.package_votes.count()
+    assert votes[0]["PackageBaseID"] != target.ID
 
     # ...and that the package got deleted.
     package = db.query(Package).filter(Package.Name == pkgname).first()
